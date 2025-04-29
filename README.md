@@ -3,7 +3,7 @@
 Repositorio para el control de versiones de la **Tarea 3** del curso **Principios de Sistemas Operativos**.
 
 **Autor:** René Sánchez Torres y Jose Andrés Vargas Serrano 
-**Carné:** 2020051805 y 
+**Carné:** 2020051805 y 2019211290
 **Institución:** Tecnológico de Costa Rica
 
 ---
