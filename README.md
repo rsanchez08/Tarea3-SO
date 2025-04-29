@@ -31,8 +31,12 @@ WEB SERVER
 ./prethread-webserver -n 10 -w ./www -p 8080
 ```
 HTTP CLIENT
+Prueba
 ```bash
 ./httpclient -h localhost:8080 -m GET -p /
+```
+```bash
+./prethread-webserver -n 10 -w ./www -p 8080
 ```
 STRESS CLIENT
 ```bash
