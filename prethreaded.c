@@ -10,6 +10,8 @@
 #include <sys/stat.h>
 #include <dirent.h>
 #include <time.h>
+#include <ctype.h>
+#include <inttypes.h>
 
 #define MAX_THREADS 100
 #define QUEUE_SIZE 100
@@ -63,7 +65,7 @@ void send_response(int client, const char *response) {
 void url_decode(char *str) {
     char *src = str, *dst = str;
     while (*src) {
-        if (*src == '%' && isxdigit(*(src+1)) && isxdigit(*(src+2))) {
+        if (*src == '%' && isxdigit((unsigned char)*(src+1)) && isxdigit((unsigned char)*(src+2))) {
             *dst = (char) strtol(src+1, NULL, 16);
             src += 3;
         } else {
@@ -141,9 +143,9 @@ void handle_get(int client, HTTPRequest *req) {
     char headers[1024];
     snprintf(headers, sizeof(headers),
         "HTTP/1.1 200 OK\r\n"
-        "Content-Length: %ld\r\n"
+        "Content-Length: %" PRId64 "\r\n"
         "Connection: close\r\n\r\n",
-        st.st_size);
+        (int64_t)st.st_size);
     
     send(client, headers, strlen(headers), 0);
     
