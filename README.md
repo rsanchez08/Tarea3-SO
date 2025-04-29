@@ -39,8 +39,11 @@ Prueba
 ./prethread-webserver -n 10 -w ./www -p 8080
 ```
 STRESS CLIENT
+*-n 100: Define el número de hilos*
+*./httpclient: Ruta al ejecutable del cliente en C*
+*El resto son parámetros para el cliente*
 ```bash
-python3 stressclient.py -n 100 ./httpclient -- -h localhost:8080 -m GET -p /
+python3 stressclient.py -n 100 ./httpclient -h localhost:8080 -m GET -p /
 ```
 
 
