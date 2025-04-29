@@ -17,25 +17,26 @@ Repositorio para el control de versiones de la **Tarea 3** del curso **Principio
 
 ## 🚀 Compilación
 
-
+WEB SERVER
 ```bash
-gcc -o rastreador rastreador.c syscall_map.c
+gcc prethreaded.c -o prethread-webserver -lpthread
+```
+HTTP CLIENT
+```bash
+gcc httpclient.c -o httpclient
 ```
 ## 🦾 EJECUCIÓN 
+WEB SERVER
 ```bash
-./rastreador -h 
+./prethread-webserver -n 10 -w ./www -p 8080
 ```
-Rastreo básico.
+HTTP CLIENT
 ```bash
-./rastreador ls
+./httpclient -h localhost:8080 -m GET -p /
 ```
-Rastreo con detalles.
+STRESS CLIENT
 ```bash
-./rastreador -v ls 
-```
-Rastreo con pausas.
-```bash
-./rastreador -V ls
+python3 stressclient.py -n 100 ./httpclient -- -h localhost:8080 -m GET -p /
 ```
 
 
