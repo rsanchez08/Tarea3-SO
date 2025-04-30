@@ -54,7 +54,7 @@ curl -I http://localhost:8080/index.html
 ```
 **POST**
 ```bash
-curl -X POST -H "Content-Type: application/json" -d '{"id":2,"nombre":"Rene","puesto":"QA"}' http://localhost:8080/api/data.json -v
+curl -X POST -H "Content-Length: 23" -d "Contenido inicial del archivo" http://localhost:8080/miarchivo.txt -v
 ```
 
 **PUT**
