@@ -16,7 +16,6 @@
 #define MAX_THREADS 2
 #define QUEUE_SIZE 3
 #define BUFFER_SIZE 4096
-#define PROTOCOL_MAX 16
 #define MAX_HEADERS 20
 #define MAX_CONTENT_LENGTH 1048576
 
@@ -34,6 +33,7 @@ typedef struct {
     char headers[MAX_HEADERS][2][256];
     int header_count;
     long content_length;
+    char *body;
 } HTTPRequest;
 
 Queue queue;
@@ -48,7 +48,7 @@ void send_response(int client, const char *response) {
 void url_decode(char *str) {
     char *src = str, *dst = str;
     while (*src) {
-        if (*src == '%' && isxdigit((unsigned char)*(src+1)) && isxdigit((unsigned char)*(src+2))) {
+        if (*src == '%' && isxdigit((unsigned char)*(src+1) && isxdigit((unsigned char)*(src+2)))) {
             *dst = (char) strtol(src+1, NULL, 16);
             src += 3;
         } else {
@@ -59,16 +59,17 @@ void url_decode(char *str) {
     *dst = '\0';
 }
 
-int parse_request(const char *buffer, HTTPRequest *req, int total_bytes) {
-    char *line = strtok((char*)buffer, "\r\n");
+int parse_request(char *buffer, HTTPRequest *req, int total_read) {
+    char *line = strtok(buffer, "\r\n");
     if (!line) return -1;
     
     sscanf(line, "%15s %255s %15s", req->method, req->path, req->version);
     
     req->header_count = 0;
     req->content_length = 0;
+    req->body = NULL;
     
-    while ((line = strtok(NULL, "\r\n")) && strlen(line) > 0) {
+    while ((line = strtok(NULL, "\r\n")) && *line != '\0') {
         if (req->header_count >= MAX_HEADERS) break;
         
         char name[256], value[256];
@@ -84,14 +85,12 @@ int parse_request(const char *buffer, HTTPRequest *req, int total_bytes) {
         }
     }
     
-    // Manejar el cuerpo del mensaje
     char *body_start = strstr(buffer, "\r\n\r\n");
-    if (body_start && req->content_length > 0) {
-        body_start += 4;
-        size_t headers_length = body_start - buffer;
-        size_t body_length = total_bytes - headers_length;
+    if (body_start) {
+        req->body = body_start + 4;
+        size_t body_size = total_read - (req->body - buffer);
         
-        if (body_length < req->content_length) {
+        if (req->content_length > 0 && body_size < req->content_length) {
             return -2; // Cuerpo incompleto
         }
     }
@@ -110,8 +109,7 @@ const char* get_mime_type(const char *filename) {
         {".html", "text/html"}, {".css", "text/css"},
         {".js", "application/javascript"}, {".json", "application/json"},
         {".jpg", "image/jpeg"}, {".png", "image/png"},
-        {".gif", "image/gif"}, {".txt", "text/plain"},
-        {".zip", "application/zip"}
+        {".txt", "text/plain"}, {".zip", "application/zip"}
     };
 
     for (size_t i = 0; i < sizeof(mime_types)/sizeof(mime_types[0]); i++) {
@@ -136,7 +134,7 @@ void handle_get(int client, HTTPRequest *req) {
         return;
     }
     
-    snprintf(full_path, sizeof(full_path), "%s%s", web_root, decoded_path);
+    snprintf(full_path, sizeof(full_path), "%s/%s", web_root, decoded_path);
     
     if (stat(full_path, &st) == -1) {
         send_response(client, "HTTP/1.1 404 Not Found\r\n\r\n");
@@ -185,7 +183,7 @@ void handle_head(int client, HTTPRequest *req) {
     strncpy(decoded_path, req->path, 511);
     url_decode(decoded_path);
     
-    snprintf(full_path, sizeof(full_path), "%s%s", web_root, decoded_path);
+    snprintf(full_path, sizeof(full_path), "%s/%s", web_root, decoded_path);
     
     if (stat(full_path, &st) == 0) {
         const char *mime_type = get_mime_type(full_path);
@@ -214,7 +212,7 @@ void handle_delete(int client, HTTPRequest *req) {
         return;
     }
     
-    snprintf(full_path, sizeof(full_path), "%s%s", web_root, decoded_path);
+    snprintf(full_path, sizeof(full_path), "%s/%s", web_root, decoded_path);
     
     if (remove(full_path) == 0) {
         send_response(client, "HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n");
@@ -223,7 +221,7 @@ void handle_delete(int client, HTTPRequest *req) {
     }
 }
 
-void handle_put(int client, HTTPRequest *req, char *buffer) {
+void handle_put(int client, HTTPRequest *req) {
     char full_path[512], decoded_path[512];
     
     strncpy(decoded_path, req->path, 511);
@@ -234,26 +232,31 @@ void handle_put(int client, HTTPRequest *req, char *buffer) {
         return;
     }
     
-    snprintf(full_path, sizeof(full_path), "%s%s", web_root, decoded_path);
+    snprintf(full_path, sizeof(full_path), "%s/%s", web_root, decoded_path);
     
-    // Crear o sobrescribir archivo
-    char *body = strstr(buffer, "\r\n\r\n");
-    if (body && req->content_length > 0) {
-        body += 4;
-        FILE *file = fopen(full_path, "wb");
-        if (file) {
-            fwrite(body, 1, req->content_length, file);
-            fclose(file);
-            send_response(client, "HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n");
-        } else {
-            send_response(client, "HTTP/1.1 403 Forbidden\r\n\r\n");
-        }
-    } else {
-        send_response(client, "HTTP/1.1 400 Bad Request\r\n\r\n");
+    FILE *file = fopen(full_path, "wb");
+    if (!file) {
+        send_response(client, "HTTP/1.1 403 Forbidden\r\n\r\n");
+        return;
     }
+    
+    if (req->content_length > 0 && req->body) {
+        fwrite(req->body, 1, req->content_length, file);
+        fflush(file);
+    }
+    
+    fclose(file);
+    
+    int created = access(full_path, F_OK) != 0 ? 1 : 0;
+    const char *response = 
+        created ? 
+        "HTTP/1.1 201 Created\r\nContent-Length: 0\r\n\r\n" :
+        "HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n";
+    
+    send(client, response, strlen(response), 0);
 }
 
-void handle_post(int client, HTTPRequest *req, char *buffer) {
+void handle_post(int client, HTTPRequest *req) {
     char full_path[512], decoded_path[512];
     
     strncpy(decoded_path, req->path, 511);
@@ -264,31 +267,34 @@ void handle_post(int client, HTTPRequest *req, char *buffer) {
         return;
     }
     
-    snprintf(full_path, sizeof(full_path), "%s%s", web_root, decoded_path);
+    snprintf(full_path, sizeof(full_path), "%s/%s", web_root, decoded_path);
     
-    // Verificar si el archivo ya existe
     if (access(full_path, F_OK) == 0) {
         send_response(client, "HTTP/1.1 409 Conflict\r\n\r\nArchivo ya existe");
         return;
     }
     
-    // Crear nuevo archivo
-    char *body = strstr(buffer, "\r\n\r\n");
-    if (body && req->content_length > 0) {
-        body += 4;
-        FILE *file = fopen(full_path, "wb");
-        if (file) {
-            fwrite(body, 1, req->content_length, file);
-            fclose(file);
-            send_response(client, "HTTP/1.1 201 Created\r\nContent-Length: 0\r\n\r\n");
-        } else {
-            send_response(client, "HTTP/1.1 403 Forbidden\r\n\r\n");
-        }
-    } else {
-        send_response(client, "HTTP/1.1 400 Bad Request\r\n\r\n");
+    FILE *file = fopen(full_path, "wb");
+    if (!file) {
+        send_response(client, "HTTP/1.1 403 Forbidden\r\n\r\n");
+        return;
     }
+    
+    if (req->content_length > 0 && req->body) {
+        fwrite(req->body, 1, req->content_length, file);
+        fflush(file);
+    }
+    
+    fclose(file);
+    
+    const char *response = 
+        "HTTP/1.1 201 Created\r\n"
+        "Content-Location: %s\r\n"
+        "Content-Length: 0\r\n\r\n";
+    char full_response[256];
+    snprintf(full_response, sizeof(full_response), response, req->path);
+    send(client, full_response, strlen(full_response), 0);
 }
-
 
 void* worker(void* arg) {
     while (1) {
@@ -302,26 +308,43 @@ void* worker(void* arg) {
         pthread_mutex_unlock(&queue.mutex);
 
         char buffer[BUFFER_SIZE + MAX_CONTENT_LENGTH];
-        int bytes = recv(client, buffer, BUFFER_SIZE, 0);
+        int total_read = 0;
+        int bytes;
+
+        // Leer headers
+        while ((bytes = recv(client, buffer + total_read, BUFFER_SIZE - total_read, 0)) > 0) {
+            total_read += bytes;
+            buffer[total_read] = '\0';
+            
+            if (strstr(buffer, "\r\n\r\n")) break;
+            
+            if (total_read >= BUFFER_SIZE) {
+                send_response(client, "HTTP/1.1 413 Payload Too Large\r\n\r\n");
+                close(client);
+                continue;
+            }
+        }
+
         if (bytes <= 0) {
             close(client);
             continue;
         }
-        buffer[bytes] = '\0';
 
         HTTPRequest req;
-        int parse_result = parse_request(buffer, &req, bytes);
-        
-        // Leer contenido restante si es necesario
-        if (parse_result == -2 && req.content_length > 0) {
-            int total_read = bytes;
-            while (total_read < req.content_length + (BUFFER_SIZE - (buffer + bytes - strstr(buffer, "\r\n\r\n")))) {
-                int new_bytes = recv(client, buffer + total_read, sizeof(buffer) - total_read - 1, 0);
-                if (new_bytes <= 0) break;
-                total_read += new_bytes;
+        int parse_result = parse_request(buffer, &req, total_read);
+
+        // Leer cuerpo si es necesario
+        if (parse_result == 0 && req.content_length > 0) {
+            int body_read = total_read - (req.body - buffer);
+            int remaining = req.content_length - body_read;
+            
+            while (remaining > 0) {
+                bytes = recv(client, req.body + body_read, remaining, 0);
+                if (bytes <= 0) break;
+                body_read += bytes;
+                remaining -= bytes;
+                total_read += bytes;
             }
-            buffer[total_read] = '\0';
-            parse_result = parse_request(buffer, &req, total_read);
         }
 
         if (parse_result) {
@@ -337,9 +360,9 @@ void* worker(void* arg) {
         } else if (strcmp(req.method, "DELETE") == 0) {
             handle_delete(client, &req);
         } else if (strcmp(req.method, "PUT") == 0) {
-            handle_put(client, &req, buffer);
+            handle_put(client, &req);
         } else if (strcmp(req.method, "POST") == 0) {
-            handle_post(client, &req, buffer);
+            handle_post(client, &req);
         } else {
             send_response(client, "HTTP/1.1 501 Not Implemented\r\n\r\n");
         }
