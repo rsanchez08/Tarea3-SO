@@ -244,7 +244,7 @@ int main(int argc, char *argv[]) {
 
     printf("Servidor iniciado en puerto %d\n", port);
     printf("Hilos trabajadores: %d\n", num_threads);
-    printf("Conexiones maximas: %d\n", num_threads + QUEUE_SIZE);
+    printf("Conexiones maximas (NUMERO DE HILOS + COLA (3)): %d\n", num_threads + QUEUE_SIZE);
 
     while (1) {
         int client = accept(server, NULL, NULL);
@@ -270,7 +270,7 @@ int main(int argc, char *argv[]) {
             send(client, error_response, strlen(error_response), 0);
             close(client);
         } else {
-            printf("[✅] Conexión aceptada | En cola: %d\n", queue.count + 1);
+            printf("[✅] Conexión aceptada | En cola: %d\n", queue.count);
             queue.sockets[queue.rear] = client;
             queue.rear = (queue.rear + 1) % QUEUE_SIZE;
             queue.count++;
