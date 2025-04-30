@@ -16,9 +16,9 @@
 #define MAX_THREADS 2
 #define QUEUE_SIZE 3
 #define BUFFER_SIZE 4096
-#define PROTOCOL_MAX 16
 #define MAX_HEADERS 20
 #define MAX_CONTENT_LENGTH 1048576
+#define JSON_FILE "api/data.json"
 
 typedef struct {
     int sockets[QUEUE_SIZE];
@@ -43,6 +43,17 @@ int port;
 void send_response(int client, const char *response) {
     send(client, response, strlen(response), 0);
     close(client);
+}
+
+int contains_parent_path(const char *path) {
+    const char *ptr = path;
+    while ((ptr = strstr(ptr, "..")) != NULL) {
+        if ((ptr == path || *(ptr-1) == '/') && (ptr[2] == '/' || ptr[2] == '\0')) {
+            return 1;
+        }
+        ptr += 2;
+    }
+    return 0;
 }
 
 void url_decode(char *str) {
@@ -98,7 +109,7 @@ const char* get_mime_type(const char *filename) {
         {".js", "application/javascript"}, {".json", "application/json"},
         {".jpg", "image/jpeg"}, {".png", "image/png"},
         {".gif", "image/gif"}, {".txt", "text/plain"},
-        {".zip", "application/zip"}
+        {".zip", "application/zip"}, {".ico", "image/x-icon"}
     };
 
     for (size_t i = 0; i < sizeof(mime_types)/sizeof(mime_types[0]); i++) {
@@ -109,16 +120,14 @@ const char* get_mime_type(const char *filename) {
     return "application/octet-stream";
 }
 
-void handle_get(int client, HTTPRequest *req) {
-    sleep(2);  // Simula procesamiento lento
-    
+void handle_get(int client, HTTPRequest *req, int send_body) {
     char full_path[512], decoded_path[512];
     struct stat st;
     
     strncpy(decoded_path, req->path, 511);
     url_decode(decoded_path);
     
-    if (strstr(decoded_path, "..")) {
+    if (contains_parent_path(decoded_path)) {
         send_response(client, "HTTP/1.1 403 Forbidden\r\n\r\n");
         return;
     }
@@ -156,7 +165,7 @@ void handle_get(int client, HTTPRequest *req) {
     
     send(client, headers, strlen(headers), 0);
     
-    if (strcmp(req->method, "GET") == 0) {
+    if (send_body) {
         char buffer[BUFFER_SIZE];
         size_t bytes;
         while ((bytes = fread(buffer, 1, sizeof(buffer), file)) > 0) {
@@ -165,6 +174,101 @@ void handle_get(int client, HTTPRequest *req) {
     }
     
     fclose(file);
+}
+
+void handle_post(int client, HTTPRequest *req) {
+    char *body = malloc(req->content_length + 1);
+    if (!body) {
+        send_response(client, "HTTP/1.1 500 Internal Server Error\r\n\r\n");
+        return;
+    }
+    
+    size_t total_read = 0;
+    while (total_read < req->content_length) {
+        ssize_t bytes = recv(client, body + total_read, req->content_length - total_read, 0);
+        if (bytes <= 0) break;
+        total_read += bytes;
+    }
+    body[total_read] = '\0';
+
+    if (strcmp(req->path, "/api/data.json") == 0) {
+        char full_path[512];
+        snprintf(full_path, sizeof(full_path), "%s/%s", web_root, JSON_FILE);
+        
+        FILE *file = fopen(full_path, "r+");
+        if (!file) {
+            free(body);
+            send_response(client, "HTTP/1.1 404 Not Found\r\n\r\n");
+            return;
+        }
+        
+        fseek(file, -2, SEEK_END);
+        fprintf(file, ",\n    %s\n]", body);
+        fclose(file);
+        
+        send_response(client, 
+            "HTTP/1.1 201 Created\r\n"
+            "Content-Type: application/json\r\n"
+            "Content-Length: 29\r\n\r\n"
+            "{\"status\":\"Registro agregado\"}");
+    } else {
+        send_response(client, 
+            "HTTP/1.1 200 OK\r\n"
+            "Content-Type: text/plain\r\n"
+            "Content-Length: 16\r\n\r\n"
+            "POST recibido OK!");
+    }
+    
+    free(body);
+}
+
+void handle_put(int client, const char *path) {
+    char full_path[512], decoded_path[512];
+    
+    strncpy(decoded_path, path, 511);
+    url_decode(decoded_path);
+    
+    if (contains_parent_path(decoded_path)) {
+        send_response(client, "HTTP/1.1 403 Forbidden\r\n\r\n");
+        return;
+    }
+    
+    snprintf(full_path, sizeof(full_path), "%s%s", web_root, decoded_path);
+    
+    FILE *file = fopen(full_path, "wb");
+    if (!file) {
+        send_response(client, "HTTP/1.1 403 Forbidden\r\n\r\n");
+        return;
+    }
+    
+    char buffer[BUFFER_SIZE];
+    ssize_t bytes;
+    while ((bytes = recv(client, buffer, sizeof(buffer), 0)) > 0) {
+        fwrite(buffer, 1, bytes, file);
+    }
+    
+    fclose(file);
+    send_response(client, "HTTP/1.1 201 Created\r\n\r\n");
+}
+
+void handle_delete(int client, const char *path) {
+    char full_path[512], decoded_path[512];
+    
+    strncpy(decoded_path, path, 511);
+    url_decode(decoded_path);
+    
+    if (contains_parent_path(decoded_path)) {
+        send_response(client, "HTTP/1.1 403 Forbidden\r\n\r\n");
+        return;
+    }
+    
+    snprintf(full_path, sizeof(full_path), "%s%s", web_root, decoded_path);
+    
+    if (unlink(full_path) == 0) {
+        send_response(client, "HTTP/1.1 200 OK\r\n\r\n");
+    } else {
+        send_response(client, "HTTP/1.1 404 Not Found\r\n\r\n");
+    }
 }
 
 void* worker(void* arg) {
@@ -193,7 +297,15 @@ void* worker(void* arg) {
         }
 
         if (strcmp(req.method, "GET") == 0) {
-            handle_get(client, &req);
+            handle_get(client, &req, 1);
+        } else if (strcmp(req.method, "HEAD") == 0) {
+            handle_get(client, &req, 0);
+        } else if (strcmp(req.method, "POST") == 0) {
+            handle_post(client, &req);
+        } else if (strcmp(req.method, "PUT") == 0) {
+            handle_put(client, req.path);
+        } else if (strcmp(req.method, "DELETE") == 0) {
+            handle_delete(client, req.path);
         } else {
             send_response(client, "HTTP/1.1 501 Not Implemented\r\n\r\n");
         }
@@ -251,12 +363,12 @@ int main(int argc, char *argv[]) {
         if (client == -1) continue;
 
         pthread_mutex_lock(&queue.mutex);
-        if (queue.count == QUEUE_SIZE) {
+        if (queue.count >= QUEUE_SIZE) {  // Cambio clave: >= en lugar de ==
             printf("[🛑] Conexión rechazada (503) | En cola: %d\n", queue.count);
             const char *error_body = 
                 "<html><body>"
                 "<h1>503 Service Unavailable</h1>"
-                "<p>El servidor no puede aceptar mas conexiones</p>"
+                "<p>El servidor no puede aceptar más conexiones</p>"
                 "</body></html>";
             
             char error_response[512];
@@ -270,10 +382,10 @@ int main(int argc, char *argv[]) {
             send(client, error_response, strlen(error_response), 0);
             close(client);
         } else {
-            printf("[✅] Conexión aceptada | En cola: %d\n", queue.count);
             queue.sockets[queue.rear] = client;
             queue.rear = (queue.rear + 1) % QUEUE_SIZE;
             queue.count++;
+            printf("[✅] Conexión aceptada | En cola: %d\n", queue.count);  
             pthread_cond_signal(&queue.cond);
         }
         pthread_mutex_unlock(&queue.mutex);
