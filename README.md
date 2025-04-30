@@ -32,7 +32,7 @@ WEB SERVER
 
 *-n 100: Define el número de hilos pre cargados*
 ```bash
-./prethread-webserver -n 2 -w ./www -p 8080
+./prethread-webserver -n 60 -w ./www -p 8080
 ```
 
 *METODOS DE HTTP*
@@ -86,6 +86,6 @@ curl -X DELETE http://localhost:8080/imagen.jpg -v
 
 *El resto son parámetros para el cliente*
 ```bash
-python3 stressclient.py -n 10 ./httpclient -h localhost:8080 -m GET -p /
+python3 stressclient.py -n 80 ./httpclient -h localhost:8080 -m GET -p /
 ```
 
