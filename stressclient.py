@@ -1,21 +1,36 @@
 import sys
-import threading
 import subprocess
+import concurrent.futures
 
-def attack(client_cmd):
-    subprocess.run(client_cmd, shell=True)
+def run_client(url):
+    try:
+        result = subprocess.run(
+            ["./httpclient", "-u", url],
+            capture_output=True,
+            text=True,
+            timeout=20
+        )
+        return result.stdout.strip()
+    except subprocess.TimeoutExpired:
+        return "Timeout"
+    except:
+        return "Error"
 
 def main():
-    if '-n' not in sys.argv:
-        print("Usage: stress -n <threads> HTTPclient <args>")
+    if "-n" not in sys.argv or "-u" not in sys.argv:
+        print("Uso: stressclient.py -n <num> -u <url>")
         return
     
-    n_idx = sys.argv.index('-n')
-    threads = int(sys.argv[n_idx+1])
-    client_args = ' '.join(sys.argv[n_idx+2:])
+    n = int(sys.argv[sys.argv.index("-n") + 1])
+    url = sys.argv[sys.argv.index("-u") + 1]
     
-    for _ in range(threads):
-        threading.Thread(target=attack, args=(f'python3 {client_args}',)).start()
+    print(f"Iniciando test de stress con {n} solicitudes a {url}")
+    
+    with concurrent.futures.ThreadPoolExecutor(max_workers=n) as executor:
+        futures = [executor.submit(run_client, url) for _ in range(n)]
+        
+        for i, future in enumerate(concurrent.futures.as_completed(futures)):
+            print(f"[Solicitud {i+1}] {future.result()}")
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
