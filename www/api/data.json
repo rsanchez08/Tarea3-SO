@@ -2,5 +2,6 @@
     "usuarios": [
         {"id": 1, "nombre": "Alice", "puesto": "Desarrolladora"},
         {"id": 2, "nombre": "Bob", "puesto": "Diseñador"}
-    ]
-}
+    ],
+    
+]

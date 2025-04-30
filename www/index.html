@@ -9,11 +9,14 @@
     <h1>¡Servidor Funcionando! 🚀</h1>
     <div class="content">
         <img src="imagen.jpg" alt="Demo">
-		<form id="myForm">
-    		<input type="text" id="mensaje" placeholder="Escribe algo">
-    		<button type="submit">Enviar</button>
-		</form>
+        <p>Prueba el formulario:</p>
+        
+        <!-- Formulario para enviar mensajes -->
+        <form action="/api/mensajes" method="POST">
+            <input type="text" name="usuario" placeholder="Tu nombre">
+            <textarea name="mensaje" placeholder="Escribe tu mensaje"></textarea>
+            <button type="submit">Enviar</button>
+        </form>
     </div>
-    <script src="/script.js" type="text/javascript"></script>
 </body>
 </html>
