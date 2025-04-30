@@ -29,6 +29,7 @@ gcc httpclient.c -o httpclient
 ```
 ## 🦾 EJECUCIÓN 
 WEB SERVER
+
 *-n 100: Define el número de hilos pre cargados*
 ```bash
 ./prethread-webserver -n 2 -w ./www -p 8080
@@ -77,8 +78,11 @@ curl -X DELETE http://localhost:8080/imagen.jpg -v
 ```
 
 *STRESS CLIENT*
+
 *-n 100: Define el número de hilos*
+
 *./httpclient: Ruta al ejecutable del cliente en C*
+
 *El resto son parámetros para el cliente*
 ```bash
 python3 stressclient.py -n 10 ./httpclient -h localhost:8080 -m GET -p /
