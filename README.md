@@ -62,7 +62,7 @@ curl -X POST -H "Content-Type: application/json" -d '{"id":2,"nombre":"Rene","pu
 echo "Contenido de prueba" > prueba.txt
 ```
 ```bash
-curl -X PUT -T prueba.txt http://localhost:8080/prueba.txt -v
+curl PUT prueba.txt http://localhost:8080/prueba.txt -v
 ```
 
 **DELETE**
