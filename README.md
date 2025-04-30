@@ -30,13 +30,27 @@ WEB SERVER
 ```bash
 ./prethread-webserver -n 10 -w ./www -p 8080
 ```
-HTTP CLIENT
-Prueba
+
+METODOS DE HTTP 
+**GET**
 ```bash
-./httpclient -h localhost:8080 -m GET -p /
+curl -v http://localhost:8080/index.html
 ```
 ```bash
-./prethread-webserver -n 10 -w ./www -p 8080
+curl -v http://localhost:8080/api/data.json
+```
+```bash
+curl -v http://localhost:8080/directorio_sin_index
+```
+
+**HEAD**
+
+
+HTTP CLIENT
+```bash
+./httpclient -u http://localhost:8080/imagen.jpg -o imagenDescargada.jpg
+```
+```bash
 ```
 STRESS CLIENT
 *-n 100: Define el número de hilos*
