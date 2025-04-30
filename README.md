@@ -25,7 +25,7 @@ gcc prethreaded.c -o prethread-webserver -lpthread
 ```
 *HTTP CLIENT*
 ```bash
-gcc httpclient.c -o httpclient
+gcc httpclient.c -o httpclient -lcurl
 ```
 ## 🦾 EJECUCIÓN 
 WEB SERVER
