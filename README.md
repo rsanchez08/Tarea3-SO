@@ -86,6 +86,5 @@ curl -X DELETE http://localhost:8080/imagen.jpg -v
 
 *El resto son parámetros para el cliente*
 ```bash
-python3 stressclient.py -n 80 ./httpclient -h localhost:8080 -m GET -p /
-```
+python3 stressclient.py -n 10 -u http://localhost:8080```
 
